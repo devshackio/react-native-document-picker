@@ -71,27 +71,46 @@ RCT_EXPORT_METHOD(show:(NSDictionary *)options
 
         [url startAccessingSecurityScopedResource];
 
-        NSFileCoordinator *coordinator = [[NSFileCoordinator alloc] init];
-        __block NSError *error;
+         NSFileCoordinator *coordinator = [[NSFileCoordinator alloc] init];
+         __block NSError *error;
+        __block NSData *fileData;
 
-        [coordinator coordinateReadingItemAtURL:url options:NSFileCoordinatorReadingResolvesSymbolicLink error:&error byAccessor:^(NSURL *newURL) {
-            NSMutableDictionary* result = [NSMutableDictionary dictionary];
+         [coordinator coordinateReadingItemAtURL:url options:NSFileCoordinatorReadingForUploading error:&error byAccessor:^(NSURL *newURL) {
+             // We move the file to a new directory so other things can access it,
+             // otherwise the file gets deleted soon after this block is done
+             NSString *rootPath = [NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES) objectAtIndex:0];
+             NSString *toPath = [rootPath stringByAppendingPathComponent:@"importedFiles"];
+             NSError * error = nil;
+             [[NSFileManager defaultManager] createDirectoryAtPath:toPath
+                                       withIntermediateDirectories:YES
+                                                        attributes:nil
+                                                             error:&error];
+             NSString *destStr = [toPath stringByAppendingPathComponent:[newURL lastPathComponent]];
 
-            [result setValue:newURL.absoluteString forKey:@"uri"];
-            [result setValue:[newURL lastPathComponent] forKey:@"fileName"];
+             NSError *fileConversionError;
+             fileData = [NSData dataWithContentsOfURL:newURL options:NSDataReadingUncached error:&fileConversionError];
+             [fileData writeToFile:destStr atomically:YES];
 
-            NSError *attributesError = nil;
-            NSDictionary *fileAttributes = [[NSFileManager defaultManager] attributesOfItemAtPath:newURL.path error:&attributesError];
-            if(!attributesError) {
-                [result setValue:[fileAttributes objectForKey:NSFileSize] forKey:@"fileSize"];
-            } else {
-                NSLog(@"%@", attributesError);
-            }
+             NSMutableDictionary* result = [NSMutableDictionary dictionary];
+             NSURL *movedUrl = [NSURL fileURLWithPath:destStr];
 
-            callback(@[[NSNull null], result]);
-        }];
+             [result setValue:movedUrl.absoluteString forKey:@"uri"];
+             [result setValue:[movedUrl lastPathComponent] forKey:@"fileName"];
 
-        [url stopAccessingSecurityScopedResource];
+             NSError *attributesError = nil;
+             NSDictionary *fileAttributes = [[NSFileManager defaultManager] attributesOfItemAtPath:movedUrl.path error:&attributesError];
+             if(!attributesError) {
+                 [result setValue:[fileAttributes objectForKey:NSFileSize] forKey:@"fileSize"];
+             } else {
+                 NSLog(@"%@", attributesError);
+             }
+
+             callback(@[[NSNull null], result]);
+
+         }];
+
+         [url stopAccessingSecurityScopedResource];
+
     }
 }
 
