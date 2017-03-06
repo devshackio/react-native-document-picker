@@ -57,17 +57,31 @@ public class DocumentPicker extends ReactContextBaseJavaModule implements Activi
         Intent intent;
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.KITKAT) {
             intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-        } else {
+            if (!args.isNull("filetype")) {
+                ReadableArray filetypes = args.getArray("filetype");
+                if (filetypes.size() > 1) {
+                    intent.setType("*/*");
+                    String[] extraMimeTypes = new String[filetypes.size()];
+                    for (int i=0; i<filetypes.size(); i++) {
+                        extraMimeTypes[i] = filetypes.getString(i);
+                    }
+                    intent.putExtra(Intent.EXTRA_MIME_TYPES, extraMimeTypes);
+                    intent.setType(filetypes.getString(0));
+                }
+                else {
+                    intent.setType(filetypes.getString(0));
+                }
+            }
+            else {
+                intent.setType("*/*");
+            }
+        }
+        else {
             intent = new Intent(Intent.ACTION_PICK);
+            intent.setType("*/*");
         }
         intent.addCategory(Intent.CATEGORY_OPENABLE);
 
-        if (!args.isNull("filetype")) {
-            ReadableArray filetypes = args.getArray("filetype");
-            if (filetypes.size() > 0) {
-                intent.setType(filetypes.getString(0));
-            }
-        }
 
         this.callback = callback;
 
